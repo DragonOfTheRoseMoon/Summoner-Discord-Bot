@@ -22,7 +22,7 @@ intents.members = True
 bot =commands.Bot(command_prefix='~', intents=intents)
 
 #============================File Handling===============================================================================================
-CSV_file = "C:/Users/malic/Documents/Code/PythonProjects/Discord Bots/Summoner/PlayerStats.csv"
+CSV_file = os.getenv('FilePath')
 #================================================Monsters=======================================================
 
 monster_list = {
@@ -92,38 +92,44 @@ def isAlive(userid):
         return False
 
 
-def levelup_check(userid): #see if this should level up
-    df = pd.read_csv(CSV_file)
+def levelup_check(userid, level, new_player_EXP,): #see if this should level up
     user = userid
-    level = df.loc[df["Discord_ID"] == user, "Player_LVL"].values[0]
-    EXP = df.loc[df["Discord_ID"] == user, "Player_EXP"].values[0]
+    player_level = level
+    EXP = new_player_EXP
 
     if level == 0 and EXP <=99:
         return False
-    elif level == 1 and EXP >=100:
+    elif level == 0 and EXP >=100:
         return True
-    elif level == 2 and EXP >=200:
+    elif level <= 1 and EXP >=200:
+        return True
+    elif level <= 2 and EXP >=300:
         return True
     else:
         return False
 
-        
 
-def levelup(userid):
+def levelup(userid, level, new_player_EXP):
     df = pd.read_csv(CSV_file)
     user = userid
-    level = df.loc[df["Discord_ID"] == user, "Player_LVL"].values[0]
-    EXP = df.loc[df["Discord_ID"] == user, "Player_EXP"].values[0]
+    player_level = level
+    EXP = new_player_EXP
     
-    if level == 1 and EXP >=100:
+    if player_level == 0 and EXP >=100:
+        new_level = 1
+        new_ATK = 15
+        df.loc[df["Discord_ID"] == user, ["Player_LVL", "Player_Current_ATK"]] = [new_level,new_ATK]
+        df.to_csv(CSV_file, index=False)
+        return new_level
+    elif player_level <= 1 and EXP >=200:
         new_level = 2
         new_ATK = 20
         df.loc[df["Discord_ID"] == user, ["Player_LVL", "Player_Current_ATK"]] = [new_level,new_ATK]
         df.to_csv(CSV_file, index=False)
         return new_level
-    elif level == 2 and EXP >=200:
+    elif player_level <= 2 and EXP >=200:
         new_level = 3
-        new_ATK = 30
+        new_ATK = 25
         df.loc[df["Discord_ID"] == user, ["Player_LVL", "Player_Current_ATK"]] = [new_level,new_ATK]
         df.to_csv(CSV_file, index=False)
         return new_level
@@ -178,6 +184,7 @@ def fight_monster(userid, monster_name):
     df = pd.read_csv(CSV_file)
     user = userid
     chosen_monster = monster_name
+    level = df.loc[df["Discord_ID"] == user, "Player_LVL"].values[0]
     p_ATK = df.loc[df["Discord_ID"] == user, "Player_Current_ATK"].values[0]
     p_HP = df.loc[df["Discord_ID"] == user, "Player_Current_HP"].values[0]
     p_EXP = df.loc[df["Discord_ID"] == user, "Player_EXP"].values[0]
@@ -200,8 +207,8 @@ def fight_monster(userid, monster_name):
             new_player_EXP = p_EXP + m_XP
             df.loc[df["Discord_ID"] == user, ["Player_Current_HP", "Player_EXP"]] = [p_HP, new_player_EXP]
             df.to_csv(CSV_file, index=False)
-            if levelup_check(user) == True:
-                new_level = levelup(user)
+            if levelup_check(user, level, new_player_EXP) == True:
+                new_level = levelup(user, level, new_player_EXP)
                 message_parts.append(f"You are now level {new_level}!")
                 return "\n".join(message_parts)
             else:
@@ -315,7 +322,7 @@ async def restore(ctx):
             await ctx.send(f"{ctx.author.mention} please await for more time before healing again!")
     else: 
         await ctx.send(
-        f"{ctx.author.mention} is not yet registered to fight! Please sign up with !register"
+        f"{ctx.author.mention} is not yet registered to fight! Please sign up with ~register"
         )
 
 
