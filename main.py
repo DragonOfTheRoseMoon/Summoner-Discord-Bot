@@ -23,14 +23,34 @@ bot =commands.Bot(command_prefix='~', intents=intents)
 
 #============================File Handling===============================================================================================
 CSV_file = os.getenv('FilePath')
+
+active_messages = set()
+TIMEOUT = 10 #seconds
 #================================================Monsters=======================================================
 
+rarity_values = {"common", "uncommon","rare","legendary","nothing"}
+
 monster_list = {
-    "slime":  {"name": "Slime",  "hp": 30, "attack": 5,  "xp": 10},
-    "goblin": {"name": "Goblin", "hp": 50, "attack": 8, "xp": 20},
-    "orc":    {"name": "Orc",    "hp": 60, "attack": 12, "xp": 40}
-                }
-#monster = random.choice(list(monster_list.values()))
+    "common": {
+        "slime":  {"name": "Slime",  "hp": 30, "attack": 5,  "xp": 10},
+        "goblin": {"name": "Goblin", "hp": 50, "attack": 8,  "xp": 20},
+        "orc":    {"name": "Orc",    "hp": 60, "attack": 12, "xp": 40}
+    },
+    "uncommon": {
+        "slime":  {"name": "Slime",  "hp": 30, "attack": 5,  "xp": 10},
+        "goblin": {"name": "Goblin", "hp": 50, "attack": 8,  "xp": 20},
+        "orc":    {"name": "Orc",    "hp": 60, "attack": 12, "xp": 40}
+    },
+    "rare": {
+        "slime":  {"name": "Slime",  "hp": 30, "attack": 5,  "xp": 10},
+        "goblin": {"name": "Goblin", "hp": 50, "attack": 8,  "xp": 20},
+        "orc":    {"name": "Orc",    "hp": 60, "attack": 12, "xp": 40}
+    }, 
+    "legendary": {
+        "godzilla": {"name": "Godzilla", "hp": 1000, "attack": 1000, "xp": 1000}
+    }
+}
+
 
 #============================================Functions====================================================================================
 
@@ -109,6 +129,7 @@ def levelup_check(userid, level, new_player_EXP,): #see if this should level up
         return False
 
 
+
 def levelup(userid, level, new_player_EXP):
     df = pd.read_csv(CSV_file)
     user = userid
@@ -136,6 +157,7 @@ def levelup(userid, level, new_player_EXP):
     else:
         new_level = level
         return new_level
+
 
 
 def HP_restore(userid):    #!restore
@@ -179,18 +201,37 @@ def HP_restore(userid):    #!restore
 
 
 
-def fight_monster(userid, monster_name):
+def get_rarity():
+    roll = random.randint(1, 100)
+    
+    if roll == 1:
+        return "nothing"
+    elif roll >=2 and roll <=50:
+        return "common"
+    elif roll >=51 and roll <= 70:
+        return "uncommon"
+    elif roll >=71 and roll <= 90:
+        return "rare"
+    elif roll >=91 and roll <= 100:
+        return "legendary"
+    else:
+        print("something went wrong here")
+
+
+
+def fight_monster(userid, found_rarity, monster_name):
     
     df = pd.read_csv(CSV_file)
     user = userid
+    rarity = found_rarity
     chosen_monster = monster_name
     level = df.loc[df["Discord_ID"] == user, "Player_LVL"].values[0]
     p_ATK = df.loc[df["Discord_ID"] == user, "Player_Current_ATK"].values[0]
     p_HP = df.loc[df["Discord_ID"] == user, "Player_Current_HP"].values[0]
     p_EXP = df.loc[df["Discord_ID"] == user, "Player_EXP"].values[0]
-    m_ATK = (monster_list[chosen_monster]["attack"])
-    m_HP = (monster_list[chosen_monster]["hp"])
-    m_XP = (monster_list[chosen_monster]["xp"])
+    m_ATK = (monster_list[rarity][chosen_monster]["attack"])
+    m_HP = (monster_list[rarity][chosen_monster]["hp"])
+    m_XP = (monster_list[rarity][chosen_monster]["xp"])
     player = df.loc[df["Discord_ID"]== user, "Discord_Username"].values[0]
 
     turn = 0
@@ -223,32 +264,29 @@ def fight_monster(userid, monster_name):
             df.to_csv(CSV_file, index=False)
             return "\n".join(message_parts)    
 
+
 #reminder for how messages work:
     #message_parts.append(f"message")
     #final_message = "\n".join(message_parts)
     #return final_message
+
 
 #====================================================== COMMANDS and EVENTS =============================================================
 @bot.event
 async def on_ready():
     print(f"{bot.user.name} online and ready to rumble...")
 
+@bot.command()
+async def hello(ctx):
+    #leave as test function to see if its alive
+    await ctx.send(f"hello {ctx.author.mention}")
 
-active_messages = set()
 
-TIMEOUT = 10 #seconds
-
-@bot.event
-async def on_message(message):
-    if "appears!" in message.content.lower():
-        await message.add_reaction("⚔️")
-        active_messages.add(message.id)
-        asyncio.create_task(expire_message(message.id, TIMEOUT))
-    await bot.process_commands(message)
-
-async def expire_message(message_id, delay):
-    await asyncio.sleep(delay)
-    active_messages.discard(message_id)
+@bot.command()
+async def summon(ctx):
+    rarity = get_rarity()
+    monster = random.choice(list(monster_list[rarity].values()))
+    await ctx.send(f"A {rarity} **{monster['name']}** appears! HP: {monster['hp']} | ATK: {monster['attack']}")
 
 @bot.event
 async def on_reaction_add(reaction, user):
@@ -264,10 +302,11 @@ async def on_reaction_add(reaction, user):
         if isAlive(userid) == True:
             active_messages.discard(reaction.message.id)#===== Mark as used immediately so no one else can trigger
             msg_content = reaction.message.content.lower()
-            found_monster = [m for m in monster_list if m in msg_content]
+            found_rarity = [r for r in rarity_values if r in msg_content][0]
+            found_monster = [m for m in monster_list[found_rarity] if m in msg_content]
             if found_monster:
                 monster_name = found_monster[0]
-                fight_message = fight_monster(userid, monster_name)
+                fight_message = fight_monster(userid, found_rarity, monster_name)
                 await reaction.message.channel.send(f"{fight_message}")
 
             else:
@@ -283,11 +322,17 @@ async def on_reaction_add(reaction, user):
         f"{user.mention} is not yet registered to fight! Please sign up with !register"
         )
 
+@bot.event
+async def on_message(message):
+    if "appears!" in message.content.lower():
+        await message.add_reaction("⚔️")
+        active_messages.add(message.id)
+        asyncio.create_task(expire_message(message.id, TIMEOUT))
+    await bot.process_commands(message)
 
-@bot.command()
-async def hello(ctx):
-    #leave as test function to see if its alive
-    await ctx.send(f"hello {ctx.author.mention}")
+async def expire_message(message_id, delay):
+    await asyncio.sleep(delay)
+    active_messages.discard(message_id)
 
 
 @bot.command()
@@ -325,11 +370,6 @@ async def restore(ctx):
         f"{ctx.author.mention} is not yet registered to fight! Please sign up with ~register"
         )
 
-
-@bot.command()
-async def summon(ctx):
-    monster = random.choice(list(monster_list.values()))
-    await ctx.send(f"A wild **{monster['name']}** appears! HP: {monster['hp']} | ATK: {monster['attack']}")
 
 
 @bot.command()
